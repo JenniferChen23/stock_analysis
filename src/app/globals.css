@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --up: #D85A30;
+  --down: #1D9E75;
+  --brand: #378ADD;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900;
+}

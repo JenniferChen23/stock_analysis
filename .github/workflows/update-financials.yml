@@ -1,0 +1,25 @@
+name: 每季更新財務資料
+
+on:
+  schedule:
+    # 每季財報公告後執行：1月、4月、8月、11月的15號凌晨2點
+    - cron: '0 18 15 1,4,8,11 *'
+  workflow_dispatch: # 允許手動觸發
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm ci
+
+      - name: 爬取 TWSE 財務資料並寫入 Supabase
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/fetch-financials.mjs
