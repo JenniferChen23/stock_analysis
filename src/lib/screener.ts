@@ -1,28 +1,29 @@
 export interface StockSummary {
   code: string
   name: string
-  sector: string
-  price: number
-  roe: number
-  grossMargin: number
-  debtRatio: number
-  currentRatio: number
-  dividendYield: number
-  revenueGrowthYoY: number
-  epsGrowthYoY: number
-  eps: number
-  pe: number
-  updatedAt: string
+  sector?: string
+  price?: number
+  eps?: number
+  roe?: number
+  roa?: number
+  gross_margin?: number
+  debt_ratio?: number
+  current_ratio?: number
+  dividend_yield?: number
+  revenue_growth_yoy?: number
+  eps_growth_yoy?: number
+  pe?: number
+  updated_at?: string
 }
 
 export interface ScreenerOptions {
-  roeMin: number          // ROE 最低 %，預設 15
-  grossMarginMin: number  // 毛利率最低 %，預設 20
-  debtRatioMax: number    // 負債比最高 %，預設 50
-  currentRatioMin: number // 流動比率最低 %，預設 150
-  dividendYieldMin: number// 殖利率最低 %，預設 2.5
-  revenueGrowthMin: number// 營收年增最低 %，預設 5
-  epsGrowthMin: number    // EPS 年增最低 %，預設 0
+  roeMin: number
+  grossMarginMin: number
+  debtRatioMax: number
+  currentRatioMin: number
+  dividendYieldMin: number
+  revenueGrowthMin: number
+  epsGrowthMin: number
 }
 
 export const DEFAULT_OPTIONS: ScreenerOptions = {
@@ -30,27 +31,35 @@ export const DEFAULT_OPTIONS: ScreenerOptions = {
   grossMarginMin: 20,
   debtRatioMax: 50,
   currentRatioMin: 150,
-  dividendYieldMin: 2.5,
-  revenueGrowthMin: 5,
+  dividendYieldMin: 0,       // 暫設 0，因無殖利率資料
+  revenueGrowthMin: 0,       // 暫設 0，因無年增資料
   epsGrowthMin: 0,
 }
 
-// 核心篩選公式（之後可以直接改這裡）
+function passes(value: number | null | undefined, min: number): boolean {
+  if (value == null) return true   // 缺資料→不過濾
+  return value >= min
+}
+function passesMax(value: number | null | undefined, max: number): boolean {
+  if (value == null) return true
+  return value <= max
+}
+
 export function screenStock(s: StockSummary, opts: ScreenerOptions = DEFAULT_OPTIONS): boolean {
   return (
-    s.eps > 0 &&                          // 不能虧損
-    s.roe >= opts.roeMin &&               // 賺錢效率
-    s.grossMargin >= opts.grossMarginMin &&// 護城河
-    s.debtRatio <= opts.debtRatioMax &&   // 財務安全
-    s.currentRatio >= opts.currentRatioMin &&// 短期流動性
-    s.dividendYield >= opts.dividendYieldMin &&// 配息誠意
-    s.revenueGrowthYoY >= opts.revenueGrowthMin &&// 仍在成長
-    s.epsGrowthYoY >= opts.epsGrowthMin   // 獲利不衰退
+    (s.eps == null || s.eps > 0) &&
+    passes(s.roe, opts.roeMin) &&
+    passes(s.gross_margin, opts.grossMarginMin) &&
+    passesMax(s.debt_ratio, opts.debtRatioMax) &&
+    passes(s.current_ratio, opts.currentRatioMin) &&
+    passes(s.dividend_yield, opts.dividendYieldMin) &&
+    passes(s.revenue_growth_yoy, opts.revenueGrowthMin) &&
+    passes(s.eps_growth_yoy, opts.epsGrowthMin)
   )
 }
 
 export function runScreener(stocks: StockSummary[], opts: ScreenerOptions = DEFAULT_OPTIONS): StockSummary[] {
   return stocks
     .filter(s => screenStock(s, opts))
-    .sort((a, b) => b.roe - a.roe)
+    .sort((a, b) => (b.roe ?? 0) - (a.roe ?? 0))
 }

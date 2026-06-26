@@ -114,20 +114,22 @@ export default function ScreenerModal({ onClose }: { onClose: () => void }) {
                       <td className="py-2.5 text-blue-500 font-medium">{s.code}</td>
                       <td className="py-2.5 font-medium">{s.name}</td>
                       <td className="py-2.5 text-right">
-                        <span className="bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded">{s.roe}%</span>
+                        <span className="bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded">{s.roe?.toFixed(1)}%</span>
                       </td>
                       <td className="py-2.5 text-right">
-                        <span className="bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded">{s.debtRatio}%</span>
+                        <span className="bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded">{s.debt_ratio?.toFixed(1)}%</span>
                       </td>
                       <td className="py-2.5 text-right">
-                        <span className="bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded">{s.dividendYield}%</span>
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <span className={`text-xs px-2 py-0.5 rounded ${s.revenueGrowthYoY >= 0 ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700'}`}>
-                          {s.revenueGrowthYoY >= 0 ? '+' : ''}{s.revenueGrowthYoY}%
+                        <span className="bg-orange-50 text-orange-700 text-xs px-2 py-0.5 rounded">
+                          {s.dividend_yield != null ? `${s.dividend_yield}%` : '--'}
                         </span>
                       </td>
-                      <td className="py-2.5 text-right font-medium">{s.price}</td>
+                      <td className="py-2.5 text-right">
+                        <span className={`text-xs px-2 py-0.5 rounded ${(s.revenue_growth_yoy ?? 0) >= 0 ? 'bg-orange-50 text-orange-700' : 'bg-red-50 text-red-700'}`}>
+                          {s.revenue_growth_yoy != null ? `${s.revenue_growth_yoy >= 0 ? '+' : ''}${s.revenue_growth_yoy}%` : '--'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-right font-medium">{s.price ?? '--'}</td>
                     </tr>
                   ))}
                 </tbody>

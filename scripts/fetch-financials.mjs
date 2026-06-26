@@ -3,11 +3,17 @@
  * 手動執行：node scripts/fetch-financials.mjs
  */
 
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
+require('dotenv').config({ path: '.env.local' })
+
 import { createClient } from '@supabase/supabase-js'
+import ws from 'ws'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { realtime: { transport: ws } }
 )
 
 // 上市股票代號清單（從 TWSE 取得）
@@ -48,8 +54,32 @@ async function fetchRatios(code) {
   }
 }
 
+// 測試 MOPS 是否可存取
+async function testMops() {
+  const body = new URLSearchParams({
+    encodeURIComponent: '1', step: '1', firstin: '1', off: '1',
+    TYPEK: 'sii', co_id: '2330', SYEAR: '114', SSEASON: '4',
+  })
+  const res = await fetch('https://mops.twse.com.tw/mops/web/ajax_t163sb06', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'Referer': 'https://mops.twse.com.tw/mops/web/t163sb06',
+    },
+    body: body.toString(),
+  })
+  const buffer = await res.arrayBuffer()
+  const html = new TextDecoder('big5').decode(buffer)
+  const blocked = html.includes('SECURITY') || html.includes('CAN NOT BE ACCESSED')
+  console.log(blocked ? '❌ MOPS 封鎖此 IP' : '✅ MOPS 可正常存取')
+  console.log('HTML 長度:', html.length, '含ROE:', html.includes('股東權益報酬率'))
+  return !blocked
+}
+
 async function main() {
   console.log('開始抓取股票清單…')
+  await testMops()
   const stocks = await fetchStockList()
   console.log(`共 ${stocks.length} 檔，開始更新…`)
 
