@@ -195,26 +195,48 @@ export async function fetchMopsRatios(code: string): Promise<{
   }
 }
 
-// 取得個股財務比率（TWSE BWIBBU：本益比、殖利率、淨值比）
+// 取得全市場本益比/殖利率/淨值比清單（BWIBBU_d 其實回傳當日全市場，stockNo 參數無效）
+// 欄位：代號 | 名稱 | 收盤價 | 殖利率(%) | 股利年度 | 本益比 | 股價淨值比 | 財報年/季
+async function fetchAllValuationRows(): Promise<string[][]> {
+  const url = `https://www.twse.com.tw/exchangeReport/BWIBBU_d?response=json&stockNo=2330&showAll=0`
+  const res = await fetch(url, { next: { revalidate: 3600 } })
+  const data = await res.json()
+  return data.data ?? []
+}
+
+const num = (v: string) => {
+  const n = parseFloat(v)
+  return isNaN(n) ? null : n
+}
+
+// 取得個股本益比、殖利率、淨值比（從全市場清單用代號比對）
 export async function fetchStockRatios(code: string): Promise<{
   pe: number | null
   dividendYield: number | null
   pb: number | null
 } | null> {
   try {
-    const url = `https://www.twse.com.tw/exchangeReport/BWIBBU_d?response=json&stockNo=${code}&showAll=0`
-    const res = await fetch(url, { next: { revalidate: 3600 } })
-    const data = await res.json()
-    if (!data.data?.length) return null
-    const row = data.data[0]
+    const rows = await fetchAllValuationRows()
+    const row = rows.find(r => r[0] === code)
+    if (!row) return null
     return {
-      dividendYield: parseFloat(row[2]) || null,
-      pe: parseFloat(row[4]) || null,
-      pb: parseFloat(row[5]) || null,
+      dividendYield: num(row[3]),   // 殖利率(%)
+      pe: num(row[5]),              // 本益比（無獲利為 '-'）
+      pb: num(row[6]),              // 股價淨值比
     }
   } catch {
     return null
   }
+}
+
+// 批次取得全市場殖利率/本益比（給更新腳本用）→ { code: { dividendYield, pe, pb } }
+export async function fetchAllRatios(): Promise<Record<string, { dividendYield: number | null; pe: number | null; pb: number | null }>> {
+  const rows = await fetchAllValuationRows()
+  const map: Record<string, { dividendYield: number | null; pe: number | null; pb: number | null }> = {}
+  for (const r of rows) {
+    map[r[0]] = { dividendYield: num(r[3]), pe: num(r[5]), pb: num(r[6]) }
+  }
+  return map
 }
 
 // 取得個股財務摘要（從 TWSE OpenAPI stock_summary 表）
