@@ -37,12 +37,14 @@ async function fetchMonth(rocYear, month) {
     const code = cells[0]
     if (!/^\d{4}$/.test(code)) return
     const revenue = parseInt(cells[2].replace(/,/g, ''))
-    const yoy = parseFloat(cells[6].replace(/,/g, ''))
+    const yoyRaw = parseFloat(cells[6].replace(/,/g, ''))
+    // yoy 欄位 numeric(8,2) 上限 ±999999.99，超出（基期極低的爆量）視為 null
+    const yoy = (isNaN(yoyRaw) || Math.abs(yoyRaw) > 999999.99) ? null : yoyRaw
     out.push({
       code,
       name: cells[1],
       revenue: isNaN(revenue) ? null : revenue,
-      yoy: isNaN(yoy) ? null : yoy,
+      yoy,
     })
   })
   return out
@@ -94,7 +96,7 @@ async function main() {
   for (let i = 0; i < rows.length; i += 300) {
     const batch = rows.slice(i, i + 300)
     const { error } = await supabase.from('monthly_revenue').upsert(batch, { onConflict: 'code,year,month' })
-    if (error) { console.error('  錯誤:', error.message); break }
+    if (error) console.error('  批次錯誤:', error.message)
     process.stdout.write(`\r  ${Math.min(i + 300, rows.length)}/${rows.length}`)
   }
   console.log('')
@@ -117,14 +119,15 @@ async function main() {
   const { data: existing } = await supabase.from('stock_summary').select('code')
   const existSet = new Set((existing ?? []).map(r => r.code))
   const filtered = updates.filter(u => existSet.has(u.code))
-  for (let i = 0; i < filtered.length; i += 200) {
-    const batch = filtered.slice(i, i + 200)
-    for (const u of batch) {
-      await supabase.from('stock_summary')
+  // 並行批次更新（每批 50 個同時送，加速）
+  for (let i = 0; i < filtered.length; i += 50) {
+    const batch = filtered.slice(i, i + 50)
+    await Promise.all(batch.map(u =>
+      supabase.from('stock_summary')
         .update({ dividend_yield: u.dividend_yield, pe: u.pe, revenue_growth_yoy: u.revenue_growth_yoy })
         .eq('code', u.code)
-    }
-    process.stdout.write(`\r  ${Math.min(i + 200, filtered.length)}/${filtered.length}`)
+    ))
+    process.stdout.write(`\r  ${Math.min(i + 50, filtered.length)}/${filtered.length}`)
   }
   console.log('')
   console.log(`✅ 完成！月營收 ${rows.length} 筆，殖利率更新 ${filtered.length} 家`)
