@@ -32,30 +32,44 @@ export interface FinancialData {
   epsGrowthYoY: number     // EPS 年增率 %
 }
 
-// 取得即時股價（TWSE 即時行情）
-export async function fetchStockPrice(code: string): Promise<StockPrice | null> {
+// 取得即時行情（先試上市 tse_，再試上櫃 otc_）
+async function fetchQuote(channel: string, code: string): Promise<any | null> {
   try {
-    const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${code}.tw&json=1&delay=0`
+    const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${channel}_${code}.tw&json=1&delay=0`
     const res = await fetch(url, { next: { revalidate: 60 } })
     const data = await res.json()
-    if (!data.msgArray?.length) return null
-
-    const d = data.msgArray[0]
-    const price = parseFloat(d.z) || parseFloat(d.y)
+    const d = data.msgArray?.[0]
+    if (!d) return null
+    // 成交價(z)或昨收(y)至少要有一個是有效數字，否則是空殼
+    const last = parseFloat(d.z)
     const prev = parseFloat(d.y)
-    const change = parseFloat(d.z) ? price - prev : 0
-
-    return {
-      code,
-      name: d.n,
-      price,
-      change: parseFloat(change.toFixed(2)),
-      changePercent: parseFloat(((change / prev) * 100).toFixed(2)),
-      volume: parseInt(d.v) || 0,
-      date: d.d,
-    }
+    if (isNaN(last) && isNaN(prev)) return null
+    return d
   } catch {
     return null
+  }
+}
+
+// 取得即時股價（自動判斷上市/上櫃）
+export async function fetchStockPrice(code: string): Promise<StockPrice | null> {
+  const d = (await fetchQuote('tse', code)) ?? (await fetchQuote('otc', code))
+  if (!d) return null
+
+  const last = parseFloat(d.z)
+  const prev = parseFloat(d.y)
+  // 成交價優先；盤前/無成交時用昨收
+  const price = !isNaN(last) ? last : prev
+  const base = !isNaN(prev) ? prev : last
+  const change = (!isNaN(last) && !isNaN(prev)) ? last - prev : 0
+
+  return {
+    code,
+    name: d.n ?? code,
+    price,
+    change: parseFloat(change.toFixed(2)),
+    changePercent: base ? parseFloat(((change / base) * 100).toFixed(2)) : 0,
+    volume: parseInt(d.v) || 0,
+    date: d.d ?? '',
   }
 }
 
