@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: { code: string
       .eq('code', code)
       .order('year', { ascending: false })
       .order('quarter', { ascending: false })
-      .limit(8),
+      .limit(20),
   ])
 
   if (!price) {
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: { code: string
     debt_ratio: latest?.debt_ratio ?? null,
     current_ratio: latest?.current_ratio ?? null,
     dividend_yield: ratios?.dividendYield ?? null,
-    pe_ratio: ratios?.peRatio ?? null,
+    pe_ratio: ratios?.pe ?? null,
   }
 
   return NextResponse.json({

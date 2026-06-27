@@ -141,3 +141,7 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# MOPS 抓取暫存與除錯產物
+scripts/.mops-cache.json
+mops-*.png
