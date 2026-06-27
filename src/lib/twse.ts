@@ -223,7 +223,24 @@ const num = (v: string) => {
   return isNaN(n) ? null : n
 }
 
-// 取得個股本益比、殖利率、淨值比（從全市場清單用代號比對）
+// 上櫃殖利率/本益比（櫃買中心 TPEx OpenAPI）
+async function fetchOtcRatio(code: string): Promise<{ pe: number | null; dividendYield: number | null; pb: number | null } | null> {
+  try {
+    const url = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis'
+    const data = await fetch(url, { next: { revalidate: 3600 } }).then(r => r.json())
+    const row = (data ?? []).find((r: any) => r.SecuritiesCompanyCode === code)
+    if (!row) return null
+    return {
+      dividendYield: num(row.YieldRatio),
+      pe: num(row.PriceEarningRatio),
+      pb: num(row.PriceBookRatio),
+    }
+  } catch {
+    return null
+  }
+}
+
+// 取得個股本益比、殖利率、淨值比（先查上市清單，查不到再查上櫃 TPEx）
 export async function fetchStockRatios(code: string): Promise<{
   pe: number | null
   dividendYield: number | null
@@ -232,12 +249,15 @@ export async function fetchStockRatios(code: string): Promise<{
   try {
     const rows = await fetchAllValuationRows()
     const row = rows.find(r => r[0] === code)
-    if (!row) return null
-    return {
-      dividendYield: num(row[3]),   // 殖利率(%)
-      pe: num(row[5]),              // 本益比（無獲利為 '-'）
-      pb: num(row[6]),              // 股價淨值比
+    if (row) {
+      return {
+        dividendYield: num(row[3]),   // 殖利率(%)
+        pe: num(row[5]),              // 本益比（無獲利為 '-'）
+        pb: num(row[6]),              // 股價淨值比
+      }
     }
+    // 不在上市清單 → 試上櫃
+    return await fetchOtcRatio(code)
   } catch {
     return null
   }

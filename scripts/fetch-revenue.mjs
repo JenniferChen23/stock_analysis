@@ -19,9 +19,9 @@ const supabase = createClient(
   { realtime: { transport: ws } }
 )
 
-// 抓單月靜態檔並解析（回傳 [{code, name, revenue, yoy}]）
-async function fetchMonth(rocYear, month) {
-  const url = `https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_${rocYear}_${month}_0.html`
+// 抓單一市場單月靜態檔並解析
+async function fetchMarketMonth(market, rocYear, month) {
+  const url = `https://mopsov.twse.com.tw/nas/t21/${market}/t21sc03_${rocYear}_${month}_0.html`
   let res
   try { res = await fetch(url) } catch { return null }
   if (res.status !== 200) return null
@@ -40,25 +40,41 @@ async function fetchMonth(rocYear, month) {
     const yoyRaw = parseFloat(cells[6].replace(/,/g, ''))
     // yoy 欄位 numeric(8,2) 上限 ±999999.99，超出（基期極低的爆量）視為 null
     const yoy = (isNaN(yoyRaw) || Math.abs(yoyRaw) > 999999.99) ? null : yoyRaw
-    out.push({
-      code,
-      name: cells[1],
-      revenue: isNaN(revenue) ? null : revenue,
-      yoy,
-    })
+    out.push({ code, name: cells[1], revenue: isNaN(revenue) ? null : revenue, yoy })
   })
   return out
 }
 
-// 全市場殖利率/本益比（BWIBBU_d 回傳當日全市場；欄位：代號|名稱|收盤價|殖利率|股利年度|本益比|淨值比|財報年季）
+// 上市(sii)+上櫃(otc)合併
+async function fetchMonth(rocYear, month) {
+  const [sii, otc] = await Promise.all([
+    fetchMarketMonth('sii', rocYear, month),
+    fetchMarketMonth('otc', rocYear, month),
+  ])
+  if (!sii && !otc) return null
+  return [...(sii ?? []), ...(otc ?? [])]
+}
+
+// 全市場殖利率/本益比（上市 TWSE BWIBBU_d + 上櫃 TPEx OpenAPI）
 async function fetchAllRatios() {
-  const url = 'https://www.twse.com.tw/exchangeReport/BWIBBU_d?response=json&stockNo=2330&showAll=0'
-  const data = await fetch(url).then(r => r.json())
   const map = {}
-  for (const r of data.data ?? []) {
-    const dy = parseFloat(r[3]); const pe = parseFloat(r[5])
-    map[r[0]] = { dividend_yield: isNaN(dy) ? null : dy, pe: isNaN(pe) ? null : pe }
-  }
+  // 上市：BWIBBU_d 回傳當日全市場；欄位 代號|名稱|收盤價|殖利率|股利年度|本益比|淨值比|財報年季
+  try {
+    const data = await fetch('https://www.twse.com.tw/exchangeReport/BWIBBU_d?response=json&stockNo=2330&showAll=0').then(r => r.json())
+    for (const r of data.data ?? []) {
+      const dy = parseFloat(r[3]); const pe = parseFloat(r[5])
+      map[r[0]] = { dividend_yield: isNaN(dy) ? null : dy, pe: isNaN(pe) ? null : pe }
+    }
+  } catch (e) { console.error('  上市殖利率失敗:', e.message) }
+  // 上櫃：TPEx OpenAPI
+  try {
+    const tpex = await fetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis').then(r => r.json())
+    for (const r of tpex ?? []) {
+      const code = r.SecuritiesCompanyCode
+      const dy = parseFloat(r.YieldRatio); const pe = parseFloat(r.PriceEarningRatio)
+      if (code) map[code] = { dividend_yield: isNaN(dy) ? null : dy, pe: isNaN(pe) ? null : pe }
+    }
+  } catch (e) { console.error('  上櫃殖利率失敗:', e.message) }
   return map
 }
 

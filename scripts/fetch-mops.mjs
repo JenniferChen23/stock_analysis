@@ -138,24 +138,25 @@ async function main() {
     const page = await browser.newPage()
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'zh-TW,zh;q=0.9' })
 
+    const MARKETS = ['sii', 'otc']   // 上市 + 上櫃
     for (const { roc, q } of plan) {
-      process.stdout.write(`  ${roc}Q${q} 損益表…`)
-      const incUrl = await getRedirectUrl(page, 'sii', roc, q, 't163sb04')
-      const incHtml = await fetch(incUrl).then(r => r.text())
-      const incMap = parseMopsTable(incHtml)
-      income[roc] = income[roc] || {}
-      income[roc][q] = {}
-      for (const code in incMap) income[roc][q][code] = extractIncome(incMap[code])
+      income[roc] = income[roc] || {}; income[roc][q] = {}
+      balance[roc] = balance[roc] || {}; balance[roc][q] = {}
+      let count = 0
+      for (const market of MARKETS) {
+        process.stdout.write(`  ${roc}Q${q} [${market}] 損益表…`)
+        const incUrl = await getRedirectUrl(page, market, roc, q, 't163sb04')
+        const incMap = parseMopsTable(await fetch(incUrl).then(r => r.text()))
+        for (const code in incMap) income[roc][q][code] = extractIncome(incMap[code])
 
-      process.stdout.write(' 資產負債表…')
-      const balUrl = await getRedirectUrl(page, 'sii', roc, q, 't163sb05')
-      const balHtml = await fetch(balUrl).then(r => r.text())
-      const balMap = parseMopsTable(balHtml)
-      balance[roc] = balance[roc] || {}
-      balance[roc][q] = {}
-      for (const code in balMap) balance[roc][q][code] = extractBalance(balMap[code])
-
-      console.log(` ✓ (${Object.keys(incMap).length} 家)`)
+        process.stdout.write(' 資產負債表…')
+        const balUrl = await getRedirectUrl(page, market, roc, q, 't163sb05')
+        const balMap = parseMopsTable(await fetch(balUrl).then(r => r.text()))
+        for (const code in balMap) balance[roc][q][code] = extractBalance(balMap[code])
+        count += Object.keys(incMap).length
+        process.stdout.write(' ✓')
+      }
+      console.log(` (${count} 家)`)
     }
     await browser.close()
     writeFileSync(CACHE_FILE, JSON.stringify({ income, balance }))
