@@ -22,8 +22,8 @@ export default function ReturnChart({ rows, name, code }: { rows: QuarterRow[]; 
 
   const hint = {
     single: '單季 ROE/ROA：當季獲利 ÷ 當季權益（未年化）',
-    ttm: '近4季 ROE/ROA：近 4 個單季加總，最接近「年化真實報酬率」',
-    annual: '年度 ROE/ROA：整個會計年度 4 季加總',
+    ttm: '近4季 ROE/ROA：近4季淨利加總 ÷ 最新股東權益（年化真實報酬率，同財報狗）',
+    annual: '年度 ROE/ROA：全年度淨利加總 ÷ 年末股東權益',
   }[mode]
 
   return (

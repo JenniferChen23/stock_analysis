@@ -258,8 +258,14 @@ async function main() {
     const ttmGross = sum('gross_profit')
     const ttmEps = clampRatio(parseFloat(last4.reduce((s, r) => s + (r.eps ?? 0), 0).toFixed(2)), 999999.99)
     const latest = list[0]
-    // 近4季 ROE ≈ 近 4 個單季 ROE 加總（年化真實報酬率近似）
-    const ttmRoe = clampRatio(parseFloat(last4.reduce((s, r) => s + (r.roe ?? 0), 0).toFixed(2)))
+    // 近4季 ROE = 近4季淨利加總 ÷ 最新季末股東權益
+    // 權益由「最新單季淨利 ÷ 單季roe」反推（financials 未直接存權益）
+    let ttmRoe = null
+    if (latest.roe && latest.net_income != null && last4.every(r => r.net_income != null)) {
+      const equity = latest.net_income / (latest.roe / 100)
+      if (isFinite(equity) && equity > 0) ttmRoe = clampRatio(parseFloat(((ttmNet / equity) * 100).toFixed(2)))
+    }
+    if (ttmRoe == null) ttmRoe = clampRatio(parseFloat(last4.reduce((s, r) => s + (r.roe ?? 0), 0).toFixed(2)))
     const ttmGrossMargin = ttmRevenue
       ? clampRatio(parseFloat(((ttmGross / ttmRevenue) * 100).toFixed(2)))
       : latest.gross_margin
